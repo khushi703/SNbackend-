@@ -40,7 +40,9 @@ public class AuthController {
             return ResponseEntity.ok(new AuthResponse(token));
 
         } catch (RuntimeException e) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(e.getMessage());
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                    .body("{\"error\": \"" + e.getMessage() + "\"}");
+
         }
     }
 

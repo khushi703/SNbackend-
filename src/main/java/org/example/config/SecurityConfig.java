@@ -61,16 +61,12 @@ public class SecurityConfig {
                 // Add exception handling before authorization
                 .exceptionHandling(exception -> exception
                         .authenticationEntryPoint((request, response, authException) -> {
-                            // For API paths, return 401
-                            if (request.getRequestURI().startsWith("/api/")) {
-                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
-                            }
-                            // For other paths (OAuth2), redirect to login
-                            else {
-                                response.sendRedirect("/oauth2/authorization/google");
-                            }
+                            response.setContentType("application/json");
+                            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+                            response.getWriter().write("{\"error\": \"Unauthorized or invalid token\"}");
                         })
                 )
+
 
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login", "/api/users/register").permitAll()
