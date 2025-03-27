@@ -18,6 +18,7 @@ import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
+import jakarta.servlet.http.HttpServletResponse;
 import java.util.Arrays;
 import java.util.List;
 
@@ -36,6 +37,7 @@ public class SecurityConfig {
         this.oAuth2SuccessHandler = oAuth2SuccessHandler;
     }
 
+    // ✅ Configure Authentication Manager for username and password authentication
     @Bean
     public AuthenticationManager authenticationManager() {
         DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
@@ -44,6 +46,7 @@ public class SecurityConfig {
         return new ProviderManager(authProvider);
     }
 
+    // ✅ Password encoder for secure password storage
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
@@ -54,41 +57,69 @@ public class SecurityConfig {
         http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
+
+                // Add exception handling before authorization
+                .exceptionHandling(exception -> exception
+                        .authenticationEntryPoint((request, response, authException) -> {
+                            // For API paths, return 401
+                            if (request.getRequestURI().startsWith("/api/")) {
+                                response.sendError(HttpServletResponse.SC_UNAUTHORIZED, "Unauthorized");
+                            }
+                            // For other paths (OAuth2), redirect to login
+                            else {
+                                response.sendRedirect("/oauth2/authorization/google");
+                            }
+                        })
+                )
+
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/api/auth/login", "/api/users/register").permitAll()
                         .requestMatchers("/oauth2/**", "/login/oauth2/**").permitAll()
                         .requestMatchers("/api/notes/**").authenticated()
                         .anyRequest().authenticated()
                 )
+
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
+
                 .oauth2Login(oauth2 -> oauth2
                         .successHandler(oAuth2SuccessHandler)
-                        .authorizationEndpoint(authorization -> authorization
-                                .baseUri("/oauth2/authorization")  // This must match your frontend's initiation URL
+                        .authorizationEndpoint(auth -> auth
+                                .baseUri("/oauth2/authorization")
                         )
                         .redirectionEndpoint(redirection -> redirection
-                                .baseUri("/login/oauth2/code/google")  // This must match Google's redirect_uri
+                                .baseUri("/login/oauth2/code/google")
                         )
-                        .failureHandler((request, response, exception) -> {
-                            response.sendRedirect("http://localhost:5173/login?error=oauth_failed");
-                        })
                 )
-                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS));
 
         return http.build();
     }
 
+    // ✅ Configure CORS to allow requests from frontend
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOrigins(List.of("http://localhost:5173")); // Allow frontend origin
-        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS")); // Allow all necessary methods
-        configuration.setAllowedHeaders(List.of("*")); // Allow all headers
-        configuration.setAllowCredentials(true); // Allow credentials (e.g., cookies, authorization headers)
-        configuration.setExposedHeaders(List.of("Authorization")); // Expose the Authorization header
+
+        // ✅ Allow frontend origin
+        configuration.setAllowedOrigins(List.of("http://localhost:5173"));
+
+        // ✅ Allow necessary HTTP methods
+        configuration.setAllowedMethods(Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+
+        // ✅ Allow all headers
+        configuration.setAllowedHeaders(List.of("*"));
+
+        // ✅ Allow credentials for cookies/headers
+        configuration.setAllowCredentials(true);
+
+        // ✅ Expose Authorization header in response
+        configuration.setExposedHeaders(List.of("Authorization"));
 
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/**", configuration); // Apply CORS configuration to all paths
+
+        // ✅ Apply CORS configuration to all paths
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 }
